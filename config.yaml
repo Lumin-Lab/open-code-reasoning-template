@@ -1,0 +1,12 @@
+mcpServers:
+  - name: n8n-mcp-server3
+    command: npx
+    requestOptions:
+      headers:
+        Authorization: Bearer mac
+    type: sse
+    url: http://localhost:5679/mcp/e449c9d3-6cae-4972-8aca-3a486a137b7c
+    args:
+      - "-y"
+      - mcp-remote
+      - "--debug"

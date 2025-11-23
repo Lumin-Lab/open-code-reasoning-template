@@ -29,4 +29,16 @@ export interface DebateTopic {
   description: string;
   code: string;
   script: Message[];
+  preConditions: string;
+  postConditions: string;
+  invariants: string;
+}
+
+export interface McpServer {
+  id: string;
+  name: string;
+  url: string;
+  status: 'connected' | 'disconnected' | 'connecting' | 'error';
+  toolsCount: number;
+  rawConfig?: any; // Stores the full config object from yaml
 }

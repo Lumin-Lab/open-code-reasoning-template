@@ -24,6 +24,9 @@ const SEED_DATA = [
         if not swapped:
             break
     return arr`,
+    preConditions: "Input `arr` must be a mutable list of elements that support comparison operations (<, >).",
+    postConditions: "The list `arr` contains the same elements as the input but rearranged in non-decreasing order.",
+    invariants: "At the start of each outer loop iteration, the largest elements are 'bubbled' to the end. Specifically, after `k` passes, the last `k` elements are sorted and in their final positions.",
     script: JSON.stringify([
       { id: '1', speaker: Speaker.Tutor, text: "Let's examine Bubble Sort in Python. It's often the first algorithm taught, but do you see why it's rarely used in production?" },
       { id: '2', speaker: Speaker.Student, text: "I see the nested structure with the while and for loops... that looks like O(n²) time complexity. Is it ever faster than Merge Sort?" },
@@ -51,6 +54,9 @@ const SEED_DATA = [
             right.append(x)
             
     return quick_sort(left) + [pivot] + quick_sort(right)`,
+    preConditions: "Input `arr` is a list of comparable elements.",
+    postConditions: "Returns a new list containing all elements from `arr` sorted in non-decreasing order.",
+    invariants: "During the partitioning step, every element in the `left` list is strictly less than the `pivot`, and every element in the `right` list is greater than or equal to the `pivot`.",
     script: JSON.stringify([
       { id: '1', speaker: Speaker.Tutor, text: "This Python implementation of Quick Sort uses the last element as a pivot. Can you spot the danger in this approach?" },
       { id: '2', speaker: Speaker.Student, text: "If I pass in a list that's already sorted... like `[1, 2, 3, 4]`, the pivot will always be the max value." },
@@ -87,6 +93,9 @@ def merge(left, right):
     result.extend(left[i:])
     result.extend(right[j:])
     return result`,
+    preConditions: "Input `arr` is a list of comparable elements.",
+    postConditions: "Returns a new list containing all elements from `arr` sorted in non-decreasing order.",
+    invariants: "The `merge` function maintains the invariant that `result` is always sorted and contains the smallest elements from `left` and `right` encountered so far.",
     script: JSON.stringify([
       { id: '1', speaker: Speaker.Tutor, text: "Merge Sort is reliable. It guarantees O(n log n) time complexity. But look at the `result` list in the merge function." },
       { id: '2', speaker: Speaker.Student, text: "We are creating a new list for every merge step? That seems like a lot of memory allocation." },
@@ -118,13 +127,16 @@ export const initDB = async () => {
     title TEXT,
     description TEXT,
     code TEXT,
-    script TEXT
+    script TEXT,
+    pre_conditions TEXT,
+    post_conditions TEXT,
+    invariants TEXT
   );`);
 
   // Seed data
-  const stmt = db.prepare("INSERT INTO debates (title, description, code, script) VALUES (?, ?, ?, ?)");
+  const stmt = db.prepare("INSERT INTO debates (title, description, code, script, pre_conditions, post_conditions, invariants) VALUES (?, ?, ?, ?, ?, ?, ?)");
   SEED_DATA.forEach(data => {
-      stmt.run([data.title, data.description, data.code, data.script]);
+      stmt.run([data.title, data.description, data.code, data.script, data.preConditions, data.postConditions, data.invariants]);
   });
   stmt.free();
   
@@ -145,7 +157,10 @@ export const getDebates = async (): Promise<DebateTopic[]> => {
       title: row[1],
       description: row[2],
       code: row[3],
-      script: JSON.parse(row[4] as string)
+      script: JSON.parse(row[4] as string),
+      preConditions: row[5],
+      postConditions: row[6],
+      invariants: row[7]
     };
   });
 };

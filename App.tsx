@@ -3,8 +3,29 @@ import { createRoot } from 'react-dom/client';
 import { Header } from './components/Header';
 import { CodeBlock } from './components/CodeBlock';
 import { Avatar } from './components/Avatars';
-import { Speaker, Message, DebateTopic } from './types';
+import { Speaker, Message, DebateTopic, McpServer } from './types';
 import { getDebates } from './services/db';
+import { MCPClient } from './services/mcpClient';
+
+// Define window interface to include jsyaml
+declare global {
+  interface Window {
+    jsyaml: {
+      load: (str: string) => any;
+    };
+  }
+}
+
+const DEFAULT_CONFIG_PLACEHOLDER = `{
+  "command": "npx",
+  "requestOptions": {
+    "headers": {
+      "Authorization": "Bearer token"
+    }
+  },
+  "type": "sse",
+  "args": ["-y", "mcp-remote", "--debug"]
+}`;
 
 const App: React.FC = () => {
   const [messages, setMessages] = useState<Message[]>([]);
@@ -17,9 +38,49 @@ const App: React.FC = () => {
   const [activeTopic, setActiveTopic] = useState<DebateTopic | null>(null);
   const [isTopicModalOpen, setIsTopicModalOpen] = useState(false);
   const [dbError, setDbError] = useState<string>('');
+  const [mcpLoading, setMcpLoading] = useState(false);
+  
+  // MCP Server State
+  const [mcpServers, setMcpServers] = useState<McpServer[]>([
+    { id: 'default', name: 'Local FastMCP', url: 'http://localhost:8000', status: 'disconnected', toolsCount: 0 }
+  ]);
+
+  // Edit/Add Server State
+  const [editingServer, setEditingServer] = useState<McpServer | null>(null);
+  const [isAddingServer, setIsAddingServer] = useState(false);
+  const [editForm, setEditForm] = useState({ name: '', url: '', configJson: '' });
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const chatContainerRef = useRef<HTMLDivElement>(null);
+
+  // Load Config
+  useEffect(() => {
+    const loadConfig = async () => {
+      try {
+        const response = await fetch('config.yaml');
+        if (response.ok) {
+          const yamlText = await response.text();
+          if (window.jsyaml) {
+            const config = window.jsyaml.load(yamlText);
+            if (config && Array.isArray(config.mcpServers)) {
+               const servers: McpServer[] = config.mcpServers.map((s: any, index: number) => ({
+                 id: s.id || `server-${index}-${Date.now()}`,
+                 name: s.name,
+                 url: s.url,
+                 status: 'disconnected',
+                 toolsCount: 0,
+                 rawConfig: s
+               }));
+               setMcpServers(servers);
+            }
+          }
+        }
+      } catch (error) {
+        console.warn("Failed to load config.yaml, using default state.", error);
+      }
+    };
+    loadConfig();
+  }, []);
 
   // Initialize DB and fetch topics
   useEffect(() => {
@@ -105,13 +166,189 @@ const App: React.FC = () => {
     setIsTopicModalOpen(false);
   };
 
+  const checkServerConnection = async (serverId: string) => {
+    const server = mcpServers.find(s => s.id === serverId);
+    if (!server) return;
+
+    setMcpServers(prev => prev.map(s => s.id === serverId ? { ...s, status: 'connecting' } : s));
+
+    try {
+        const client = new MCPClient(server.url);
+        const tools = await client.listTools();
+        setMcpServers(prev => prev.map(s => s.id === serverId ? { ...s, status: 'connected', toolsCount: tools.length } : s));
+    } catch (e) {
+        setMcpServers(prev => prev.map(s => s.id === serverId ? { ...s, status: 'error' } : s));
+    }
+  };
+
+  const handleFetchMcp = async () => {
+    const activeServer = mcpServers.find(s => s.status === 'connected') || mcpServers[0];
+    
+    setMcpLoading(true);
+    try {
+        const client = new MCPClient(activeServer.url);
+        const data = await client.getDebateTopic();
+        
+        // Create a new topic object with a temporary unique ID
+        const newTopic: DebateTopic = {
+            id: Date.now(),
+            ...data
+        };
+        
+        setDebateTopics(prev => [...prev, newTopic]);
+        handleTopicSelect(newTopic);
+    } catch (e: any) {
+        alert("MCP Error: " + e.message + "\n\nEnsure server is running and refresh the connection.");
+    } finally {
+        setMcpLoading(false);
+    }
+  };
+
+  const handleEditServer = (server: McpServer) => {
+    setEditingServer(server);
+    setEditForm({
+      name: server.name,
+      url: server.url,
+      configJson: JSON.stringify(server.rawConfig || {}, null, 2)
+    });
+  };
+
+  const handleAddServerClick = () => {
+    setIsAddingServer(true);
+    setEditForm({
+        name: '',
+        url: '',
+        configJson: ''
+    });
+  };
+
+  const handleRemoveServer = (e: React.MouseEvent, serverId: string) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (window.confirm("Are you sure you want to remove this MCP server?")) {
+        setMcpServers(prev => prev.filter(s => s.id !== serverId));
+    }
+  };
+
+  const closeModal = () => {
+    setEditingServer(null);
+    setIsAddingServer(false);
+    setEditForm({ name: '', url: '', configJson: '' });
+  };
+
+  const handleSaveServer = () => {
+    let parsedConfig = {};
+    if (editForm.configJson) {
+        try {
+          parsedConfig = JSON.parse(editForm.configJson);
+        } catch (e) {
+          alert("Invalid JSON configuration");
+          return;
+        }
+    }
+
+    if (editingServer) {
+        // Update existing
+        setMcpServers(prev => prev.map(s => {
+          if (s.id === editingServer.id) {
+            return {
+              ...s,
+              name: editForm.name,
+              url: editForm.url,
+              rawConfig: parsedConfig,
+              status: 'disconnected' // Reset status on config change
+            };
+          }
+          return s;
+        }));
+    } else if (isAddingServer) {
+        // Create new
+        const newServer: McpServer = {
+            id: `server-${Date.now()}`,
+            name: editForm.name,
+            url: editForm.url,
+            status: 'disconnected',
+            toolsCount: 0,
+            rawConfig: parsedConfig
+        };
+        setMcpServers(prev => [...prev, newServer]);
+    }
+
+    closeModal();
+  };
+
   if (!activeTopic && !dbError) {
     return <div className="flex h-screen items-center justify-center text-white bg-[#1A1D24]">Loading Database...</div>;
   }
 
+  const isModalOpen = editingServer !== null || isAddingServer;
+
   return (
     <div className="flex flex-col h-screen bg-[#1A1D24] text-[#E0E0E0] font-display overflow-hidden relative">
       <Header onOpenTopics={() => setIsTopicModalOpen(true)} />
+
+      {/* Edit/Add Server Modal */}
+      {isModalOpen && (
+        <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+           <div className="bg-[#252932] border border-white/10 rounded-xl shadow-2xl w-full max-w-lg flex flex-col overflow-hidden">
+              <div className="p-6 border-b border-white/10 flex justify-between items-center">
+                 <h2 className="text-xl font-bold">{isAddingServer ? 'Add MCP Server' : 'Edit MCP Server'}</h2>
+                 <button onClick={closeModal} className="text-gray-400 hover:text-white">
+                   <span className="material-symbols-outlined">close</span>
+                 </button>
+              </div>
+              <div className="p-6 space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-[#9dabb9] mb-1">Server Name</label>
+                  <input 
+                    type="text" 
+                    value={editForm.name}
+                    placeholder={isAddingServer ? "e.g. n8n-mcp-server" : ""}
+                    onChange={(e) => setEditForm({...editForm, name: e.target.value})}
+                    className="w-full bg-[#1A1D24] border border-white/10 rounded-lg px-3 py-2 text-[#E0E0E0] focus:ring-1 focus:ring-[#9F70FD] focus:outline-none placeholder:text-[#9dabb9]/30"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-[#9dabb9] mb-1">Server URL</label>
+                  <input 
+                    type="text" 
+                    value={editForm.url}
+                    placeholder={isAddingServer ? "e.g. http://localhost:5679/mcp/..." : ""}
+                    onChange={(e) => setEditForm({...editForm, url: e.target.value})}
+                    className="w-full bg-[#1A1D24] border border-white/10 rounded-lg px-3 py-2 text-[#E0E0E0] focus:ring-1 focus:ring-[#9F70FD] focus:outline-none placeholder:text-[#9dabb9]/30"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-[#9dabb9] mb-1">Configuration (JSON)</label>
+                  <div className="text-xs text-[#9dabb9] mb-2 opacity-70">
+                    Matches config.yaml structure. Edit requestOptions, headers, etc. here.
+                  </div>
+                  <textarea 
+                    value={editForm.configJson}
+                    placeholder={isAddingServer ? DEFAULT_CONFIG_PLACEHOLDER : ""}
+                    onChange={(e) => setEditForm({...editForm, configJson: e.target.value})}
+                    className="w-full h-48 bg-[#15171c] border border-white/10 rounded-lg p-3 text-xs font-mono text-[#E0E0E0] focus:ring-1 focus:ring-[#9F70FD] focus:outline-none resize-none placeholder:text-[#9dabb9]/30"
+                  />
+                </div>
+              </div>
+              <div className="p-6 border-t border-white/10 bg-[#1A1D24] flex justify-end gap-3">
+                 <button 
+                   onClick={closeModal}
+                   className="px-4 py-2 rounded-lg text-sm font-medium text-[#9dabb9] hover:text-white hover:bg-white/5 transition-colors"
+                 >
+                   Cancel
+                 </button>
+                 <button 
+                   onClick={handleSaveServer}
+                   disabled={isAddingServer && (!editForm.name || !editForm.url)}
+                   className="px-4 py-2 rounded-lg text-sm font-bold bg-[#9F70FD] text-white hover:bg-[#9F70FD]/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                 >
+                   {isAddingServer ? 'Add Server' : 'Save Changes'}
+                 </button>
+              </div>
+           </div>
+        </div>
+      )}
 
       {/* Topic Selection Modal */}
       {isTopicModalOpen && (
@@ -123,7 +360,8 @@ const App: React.FC = () => {
                  <span className="material-symbols-outlined">close</span>
                </button>
             </div>
-            <div className="p-6 overflow-y-auto space-y-4">
+            
+            <div className="p-6 overflow-y-auto space-y-4 flex-1">
                {debateTopics.map(topic => (
                  <button 
                    key={topic.id}
@@ -138,6 +376,21 @@ const App: React.FC = () => {
                  </button>
                ))}
             </div>
+
+            <div className="p-6 border-t border-white/10 bg-[#1A1D24]">
+                <button 
+                    onClick={handleFetchMcp}
+                    disabled={mcpLoading}
+                    className="w-full flex items-center justify-center gap-2 py-3 rounded-lg bg-[#252932] border border-dashed border-[#9F70FD]/50 text-[#9F70FD] hover:bg-[#9F70FD]/10 transition-colors font-bold disabled:opacity-50"
+                >
+                    {mcpLoading ? (
+                        <span className="w-5 h-5 border-2 border-[#9F70FD] border-t-transparent rounded-full animate-spin"></span>
+                    ) : (
+                        <span className="material-symbols-outlined">cloud_download</span>
+                    )}
+                    {mcpLoading ? 'Connecting to MCP Server...' : 'Fetch New Question via MCP'}
+                </button>
+            </div>
           </div>
         </div>
       )}
@@ -146,18 +399,50 @@ const App: React.FC = () => {
         
         {/* LEFT PANEL: Context & Controls */}
         <div className="flex flex-col bg-[#252932] rounded-xl shadow-lg overflow-hidden h-full border border-white/5">
-          <div className="p-6 border-b border-white/5">
+          {/* Header */}
+          <div className="p-6 border-b border-white/5 flex-shrink-0">
             <h1 className="text-2xl font-black leading-tight tracking-[-0.03em]">{activeTopic?.title || 'Debate'}</h1>
             <p className="text-[#9dabb9] text-base font-normal leading-normal mt-2">
               {activeTopic?.description}
             </p>
           </div>
           
+          {/* Scrollable Content */}
           <div className="p-6 flex-1 overflow-y-auto space-y-6">
             <div>
               <h3 className="font-bold mb-3 text-sm uppercase tracking-wider text-[#9dabb9]">Context Code Snippet</h3>
               {activeTopic && <CodeBlock code={activeTopic.code} />}
             </div>
+
+            {/* Formal Analysis Section */}
+            {activeTopic && (
+              <div>
+                <h3 className="font-bold mb-3 text-sm uppercase tracking-wider text-[#9dabb9]">Formal Analysis</h3>
+                <div className="space-y-4">
+                  <div className="bg-[#1A1D24] border border-white/5 rounded-lg p-4 transition-colors hover:border-white/10">
+                    <h4 className="text-[#9F70FD] font-bold mb-1 text-sm flex items-center gap-2">
+                      <span className="material-symbols-outlined text-sm">login</span>
+                      Pre-condition
+                    </h4>
+                    <p className="text-sm text-[#E0E0E0] leading-relaxed">{activeTopic.preConditions}</p>
+                  </div>
+                  <div className="bg-[#1A1D24] border border-white/5 rounded-lg p-4 transition-colors hover:border-white/10">
+                    <h4 className="text-[#50E3C2] font-bold mb-1 text-sm flex items-center gap-2">
+                      <span className="material-symbols-outlined text-sm">logout</span>
+                      Post-condition
+                    </h4>
+                    <p className="text-sm text-[#E0E0E0] leading-relaxed">{activeTopic.postConditions}</p>
+                  </div>
+                  <div className="bg-[#1A1D24] border border-white/5 rounded-lg p-4 transition-colors hover:border-white/10">
+                    <h4 className="text-[#4A90E2] font-bold mb-1 text-sm flex items-center gap-2">
+                      <span className="material-symbols-outlined text-sm">loop</span>
+                      Invariant
+                    </h4>
+                    <p className="text-sm text-[#E0E0E0] leading-relaxed">{activeTopic.invariants}</p>
+                  </div>
+                </div>
+              </div>
+            )}
 
             <div>
               <h3 className="text-lg font-bold mb-4">Controls</h3>
@@ -192,6 +477,73 @@ const App: React.FC = () => {
                 </div>
               </div>
             </div>
+          </div>
+
+          {/* MCP Interface Footer */}
+          <div className="bg-[#1A1D24] border-t border-white/5 p-4 text-xs flex-shrink-0">
+             <div className="flex items-center gap-3 text-[#9dabb9] mb-3">
+                <span className="material-symbols-outlined text-base cursor-pointer hover:text-white">chevron_left</span>
+                <span className="material-symbols-outlined text-base cursor-pointer hover:text-white">deployed_code</span>
+                <span className="material-symbols-outlined text-base cursor-pointer hover:text-white">edit</span>
+                <div className="px-2 py-0.5 rounded-full bg-[#3d3f43] text-[#E0E0E0] font-medium flex items-center gap-1">
+                   <span className="material-symbols-outlined text-sm">grid_view</span>
+                   MCP
+                </div>
+                <span className="ml-auto text-[#9dabb9] flex items-center gap-1 cursor-pointer hover:text-white">
+                   <span className="material-symbols-outlined text-base">desktop_windows</span>
+                   Local Assistant
+                   <span className="material-symbols-outlined text-sm">expand_more</span>
+                </span>
+             </div>
+
+             <div className="space-y-2 mb-3">
+                {mcpServers.map(server => (
+                   <div key={server.id} className="flex items-center justify-between group">
+                      <div className="flex items-center gap-2">
+                         <span className="font-bold text-[#E0E0E0]">{server.name}</span>
+                         <span className="flex items-center gap-1 text-[#9dabb9]" title="Tools Available">
+                            <span className="material-symbols-outlined text-sm">construction</span>
+                            {server.toolsCount}
+                         </span>
+                         <span className="flex items-center gap-1 text-[#9dabb9]" title="Prompts">
+                            <span className="material-symbols-outlined text-sm">terminal</span>
+                            0
+                         </span>
+                         <span className="flex items-center gap-1 text-[#9dabb9]" title="Resources">
+                            <span className="material-symbols-outlined text-sm">database</span>
+                            0
+                         </span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                         <button 
+                           type="button"
+                           onClick={() => handleEditServer(server)}
+                           className="text-[#9dabb9] hover:text-white transition-opacity"
+                         >
+                            <span className="material-symbols-outlined text-sm">edit</span>
+                         </button>
+                         <button 
+                           type="button"
+                           onClick={(e) => handleRemoveServer(e, server.id)}
+                           className="text-[#9dabb9] hover:text-red-500 transition-colors"
+                           title="Remove Server"
+                         >
+                             <span className="material-symbols-outlined text-sm">delete</span>
+                         </button>
+                         <button onClick={() => checkServerConnection(server.id)} className={`text-[#9dabb9] hover:text-white ${server.status === 'connecting' ? 'animate-spin' : ''}`}><span className="material-symbols-outlined text-sm">refresh</span></button>
+                         <span className={`w-2 h-2 rounded-full ${server.status === 'connected' ? 'bg-green-500' : server.status === 'connecting' ? 'bg-yellow-500' : server.status === 'error' ? 'bg-red-500' : 'bg-slate-500'}`}></span>
+                      </div>
+                   </div>
+                ))}
+             </div>
+             
+             <button 
+               onClick={handleAddServerClick}
+               className="w-full py-2 rounded-md bg-[#252932] border border-white/10 text-[#9dabb9] hover:text-white hover:bg-[#252932]/80 transition-colors flex items-center justify-center gap-2 font-medium"
+             >
+                <span className="material-symbols-outlined text-sm">add</span>
+                Add MCP Servers
+             </button>
           </div>
         </div>
 
