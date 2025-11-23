@@ -40,6 +40,12 @@ const App: React.FC = () => {
   const [dbError, setDbError] = useState<string>('');
   const [mcpLoading, setMcpLoading] = useState(false);
   
+  // Auth State
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [showLoginModal, setShowLoginModal] = useState(false);
+  const [loginForm, setLoginForm] = useState({ username: '', password: '' });
+  const [loginError, setLoginError] = useState('');
+
   // MCP Server State
   const [mcpServers, setMcpServers] = useState<McpServer[]>([
     { id: 'default', name: 'Local FastMCP', url: 'http://localhost:8000', status: 'disconnected', toolsCount: 0 }
@@ -154,6 +160,10 @@ const App: React.FC = () => {
   }, [isPlaying, isThinking, currentIndex, currentSpeaker, handleNextTurn, activeTopic]);
 
   const togglePlay = () => {
+    if (!isLoggedIn) {
+        setShowLoginModal(true);
+        return;
+    }
     setIsPlaying(!isPlaying);
   };
 
@@ -277,6 +287,18 @@ const App: React.FC = () => {
     closeModal();
   };
 
+  const handleLoginSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (loginForm.username === 'test' && loginForm.password === 'test') {
+      setIsLoggedIn(true);
+      setShowLoginModal(false);
+      setLoginForm({ username: '', password: '' });
+      setLoginError('');
+    } else {
+      setLoginError('Invalid credentials');
+    }
+  };
+
   if (!activeTopic && !dbError) {
     return <div className="flex h-screen items-center justify-center text-white bg-[#1A1D24]">Loading Database...</div>;
   }
@@ -285,7 +307,66 @@ const App: React.FC = () => {
 
   return (
     <div className="flex flex-col h-screen bg-[#1A1D24] text-[#E0E0E0] font-display overflow-hidden relative">
-      <Header onOpenTopics={() => setIsTopicModalOpen(true)} />
+      <Header 
+        onOpenTopics={() => setIsTopicModalOpen(true)}
+        isLoggedIn={isLoggedIn}
+        onLogin={() => {
+            setShowLoginModal(true);
+            setLoginError('');
+        }}
+        onLogout={() => {
+            setIsLoggedIn(false);
+            setIsPlaying(false);
+        }}
+      />
+
+      {/* Login Modal */}
+      {showLoginModal && (
+        <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+            <div className="bg-[#252932] border border-white/10 rounded-xl shadow-2xl w-full max-w-sm overflow-hidden animate-fade-in-up">
+                <div className="p-6 border-b border-white/10 flex justify-between items-center">
+                    <h2 className="text-xl font-bold">Login</h2>
+                    <button onClick={() => setShowLoginModal(false)} className="text-gray-400 hover:text-white">
+                        <span className="material-symbols-outlined">close</span>
+                    </button>
+                </div>
+                <form onSubmit={handleLoginSubmit} className="p-6 space-y-4">
+                    {loginError && (
+                      <div className="p-3 bg-red-500/10 border border-red-500/20 rounded-lg text-red-400 text-sm flex items-center gap-2">
+                        <span className="material-symbols-outlined text-base">error</span>
+                        {loginError}
+                      </div>
+                    )}
+                    <div>
+                        <label className="block text-sm font-medium text-[#9dabb9] mb-1">Username</label>
+                        <input 
+                            type="text" 
+                            value={loginForm.username}
+                            onChange={(e) => setLoginForm({...loginForm, username: e.target.value})}
+                            className="w-full bg-[#1A1D24] border border-white/10 rounded-lg px-3 py-2 text-[#E0E0E0] focus:ring-1 focus:ring-[#9F70FD] focus:outline-none placeholder:text-[#9dabb9]/30"
+                            placeholder="Enter username"
+                        />
+                    </div>
+                    <div>
+                        <label className="block text-sm font-medium text-[#9dabb9] mb-1">Password</label>
+                        <input 
+                            type="password" 
+                            value={loginForm.password}
+                            onChange={(e) => setLoginForm({...loginForm, password: e.target.value})}
+                            className="w-full bg-[#1A1D24] border border-white/10 rounded-lg px-3 py-2 text-[#E0E0E0] focus:ring-1 focus:ring-[#9F70FD] focus:outline-none placeholder:text-[#9dabb9]/30"
+                            placeholder="Enter password"
+                        />
+                    </div>
+                    <button 
+                        type="submit"
+                        className="w-full py-2.5 rounded-lg bg-[#9F70FD] text-white font-bold hover:bg-[#9F70FD]/90 transition-colors mt-2 shadow-lg shadow-[#9F70FD]/20"
+                    >
+                        Sign In
+                    </button>
+                </form>
+            </div>
+        </div>
+      )}
 
       {/* Edit/Add Server Modal */}
       {isModalOpen && (

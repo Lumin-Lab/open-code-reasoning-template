@@ -2,9 +2,12 @@ import React from 'react';
 
 interface HeaderProps {
     onOpenTopics: () => void;
+    isLoggedIn: boolean;
+    onLogin: () => void;
+    onLogout: () => void;
 }
 
-export const Header: React.FC<HeaderProps> = ({ onOpenTopics }) => {
+export const Header: React.FC<HeaderProps> = ({ onOpenTopics, isLoggedIn, onLogin, onLogout }) => {
   return (
     <header className="flex items-center justify-between whitespace-nowrap border-b border-solid border-white/10 px-6 py-3 shadow-sm bg-[#252932]">
       <div className="flex items-center gap-4 text-[#E0E0E0]">
@@ -35,8 +38,27 @@ export const Header: React.FC<HeaderProps> = ({ onOpenTopics }) => {
         <a className="text-sm font-medium leading-normal text-gray-400 hover:text-[#9F70FD] transition-colors hidden sm:block" href="#">Home</a>
         <a className="text-sm font-medium leading-normal text-gray-400 hover:text-[#9F70FD] transition-colors hidden sm:block" href="#">Past Debates</a>
         <a className="text-sm font-medium leading-normal text-gray-400 hover:text-[#9F70FD] transition-colors hidden sm:block" href="#">About</a>
-        <div className="bg-center bg-no-repeat aspect-square bg-cover rounded-full size-10 ring-2 ring-white/10" 
-             style={{ backgroundImage: 'url("https://lh3.googleusercontent.com/aida-public/AB6AXuCQyAVL-pgL2zbo04mJSr1HyxJeqLGDbBTEdzwIpn5VucZzN8_xex9KaO5DNu1qZSAbC_-oxqu8tj9xwZF9MzlcKnPKC3Qi1PSXKrHyJ8YwVwN_z3_Z8hnZHtPC44vqAQOE-10jyM7mLbi4z7ToO85Lrza5nfHFLV43z85frL2e87B3Y54k_Yj5-mVz61KXfNaapG29oat4dMJ7MZKttJYVyt2KRTFyhtJS__R3zK5m_2FQrqZiMdapXV3HWxoiktm4aqT-a1OXtJU")' }}></div>
+        
+        {isLoggedIn ? (
+            <div className="flex items-center gap-3">
+                <div className="bg-center bg-no-repeat aspect-square bg-cover rounded-full size-10 ring-2 ring-white/10" 
+                     style={{ backgroundImage: 'url("https://lh3.googleusercontent.com/aida-public/AB6AXuCQyAVL-pgL2zbo04mJSr1HyxJeqLGDbBTEdzwIpn5VucZzN8_xex9KaO5DNu1qZSAbC_-oxqu8tj9xwZF9MzlcKnPKC3Qi1PSXKrHyJ8YwVwN_z3_Z8hnZHtPC44vqAQOE-10jyM7mLbi4z7ToO85Lrza5nfHFLV43z85frL2e87B3Y54k_Yj5-mVz61KXfNaapG29oat4dMJ7MZKttJYVyt2KRTFyhtJS__R3zK5m_2FQrqZiMdapXV3HWxoiktm4aqT-a1OXtJU")' }}></div>
+                <button 
+                  onClick={onLogout}
+                  className="p-2 rounded-full hover:bg-white/10 text-gray-400 hover:text-white transition-colors"
+                  title="Logout"
+                >
+                  <span className="material-symbols-outlined">logout</span>
+                </button>
+            </div>
+        ) : (
+            <button 
+                onClick={onLogin}
+                className="px-4 py-2 rounded-lg bg-[#9F70FD] text-white text-sm font-bold hover:bg-[#9F70FD]/90 transition-colors shadow-lg shadow-[#9F70FD]/20"
+            >
+                Login
+            </button>
+        )}
       </div>
     </header>
   );
