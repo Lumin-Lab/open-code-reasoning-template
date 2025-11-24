@@ -34,6 +34,8 @@ const supabaseUrl = findFirst(urlCandidates);
 const supabaseKey = findFirst(keyCandidates);
 console.log('Supabase env mode', { isProduction });
 console.log('Supabase url', { supabaseUrl });
+console.log('Supabase key', { supabaseKey }, 'public anon', readEnv('NEXT_PUBLIC_SUPABASE_ANON_KEY') !== undefined);
+
 
 if (!supabaseUrl || !supabaseKey) {
 	// Warn but still create client (may fail at runtime). This helps local dev and CI to notice missing vars.
