@@ -12,14 +12,14 @@ const readEnv = (name: string) => {
 const isProduction = (import.meta.env.MODE === 'production') || (typeof process !== 'undefined' && process.env.NODE_ENV === 'production');
 // Support both VITE_ prefixed vars (development) and debate_agent_ prefixed vars (production).
 const urlCandidates = isProduction
-	? ['NEXT_PUBLIC_DEBATE_SUPABASE_URL', 'supabase_url']
+	? ['VITE_PUBLIC_SUPABASE_URL', 'supabase_url']
 	: ['VITE_SUPABASE_URL', 'vite_supabase_url'];
 
 
 
 
 const keyCandidates = isProduction
-	? ['NEXT_PUBLIC_DEBATE_SUPABASE_ANON_KEY', 'supabase_anon_key']
+	? ['VITE_PUBLIC_SUPABASE_ANON_KEY', 'supabase_anon_key']
 	: ['VITE_SUPABASE_ANON_KEY', 'vite_supabase_anon_key'];
 
 const findFirst = (candidates: string[]) => {
@@ -34,7 +34,7 @@ const supabaseUrl = findFirst(urlCandidates);
 const supabaseKey = findFirst(keyCandidates);
 console.log('Supabase env mode', { isProduction });
 console.log('Supabase url', { supabaseUrl });
-console.log('Supabase key', { supabaseKey }, 'public anon', readEnv('NEXT_PUBLIC_debate_agent_SUPABASE_ANON_KEY'));
+console.log('Supabase key', { supabaseKey }, 'public anon', readEnv('VITE_PUBLIC_SUPABASE_ANON_KEY'));
 console.log('env', import.meta.env)
 
 if (!supabaseUrl || !supabaseKey) {
