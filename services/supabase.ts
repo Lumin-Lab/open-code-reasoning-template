@@ -35,7 +35,7 @@ const supabaseKey = findFirst(keyCandidates);
 console.log('Supabase env mode', { isProduction });
 console.log('Supabase url', { supabaseUrl });
 console.log('Supabase key', { supabaseKey }, 'public anon', readEnv('NEXT_PUBLIC_debate_agent_SUPABASE_ANON_KEY'));
-console.log('env', process.env)
+console.log('env', import.meta.env)
 
 if (!supabaseUrl || !supabaseKey) {
 	// Warn but still create client (may fail at runtime). This helps local dev and CI to notice missing vars.
