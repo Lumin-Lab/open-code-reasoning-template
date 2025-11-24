@@ -10,11 +10,13 @@ const readEnv = (name: string) => {
 };
 
 const isProduction = (import.meta.env.MODE === 'production') || (typeof process !== 'undefined' && process.env.NODE_ENV === 'production');
-
 // Support both VITE_ prefixed vars (development) and debate_agent_ prefixed vars (production).
 const urlCandidates = isProduction
 	? ['debate_agent_VITE_PUBLIC_SUPABASE_URL', 'DEBATE_AGENT_VITE_PUBLIC_SUPABASE_URL', 'debate_agent_vite_public_supabase_url']
 	: ['VITE_SUPABASE_URL', 'vite_supabase_url'];
+
+
+
 
 const keyCandidates = isProduction
 	? ['debate_agent_SUPABASE_ANON_KEY', 'DEBATE_AGENT_SUPABASE_ANON_KEY', 'debate_agent_supabase_anon_key']
@@ -30,6 +32,8 @@ const findFirst = (candidates: string[]) => {
 
 const supabaseUrl = findFirst(urlCandidates);
 const supabaseKey = findFirst(keyCandidates);
+console.log('Supabase env mode', { isProduction });
+console.log('Supabase url', { supabaseUrl });
 
 if (!supabaseUrl || !supabaseKey) {
 	// Warn but still create client (may fail at runtime). This helps local dev and CI to notice missing vars.
