@@ -32,6 +32,8 @@ const findFirst = (candidates: string[]) => {
 
 const supabaseUrl = findFirst(urlCandidates);
 const supabaseKey = findFirst(keyCandidates);
+console.log('Supabase env mode', { isProduction });
+console.log('Supabase url', { supabaseUrl });
 
 if (!supabaseUrl || !supabaseKey) {
 	// Warn but still create client (may fail at runtime). This helps local dev and CI to notice missing vars.
