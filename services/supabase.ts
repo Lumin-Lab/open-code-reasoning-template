@@ -19,7 +19,7 @@ const urlCandidates = isProduction
 
 
 const keyCandidates = isProduction
-	? ['NEXT_PUBLIC_debate_agent_SUPABASE_ANON_KEY', 'supabase_anon_key']
+	? ['NEXT_PUBLIC_SUPABASE_ANON_KEY', 'supabase_anon_key']
 	: ['VITE_SUPABASE_ANON_KEY', 'vite_supabase_anon_key'];
 
 const findFirst = (candidates: string[]) => {
