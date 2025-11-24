@@ -12,14 +12,14 @@ const readEnv = (name: string) => {
 const isProduction = (import.meta.env.MODE === 'production') || (typeof process !== 'undefined' && process.env.NODE_ENV === 'production');
 // Support both VITE_ prefixed vars (development) and debate_agent_ prefixed vars (production).
 const urlCandidates = isProduction
-	? ['debate_agent_POSTGRES_URL', 'DEBATE_AGENT_POSTGRES_URL', 'debate_agent_postgres_url']
+	? ['SUPABASE_URL', 'supabase_url']
 	: ['VITE_SUPABASE_URL', 'vite_supabase_url'];
 
 
 
 
 const keyCandidates = isProduction
-	? ['debate_agent_VITE_PUBLIC_SUPABASE_ANON_KEY', 'DEBATE_AGENT_VITE_PUBLIC_SUPABASE_ANON_KEY', 'debate_agent_vite_public_supabase_anon_key']
+	? ['SUPABASE_ANON_KEY', 'supabase_anon_key']
 	: ['VITE_SUPABASE_ANON_KEY', 'vite_supabase_anon_key'];
 
 const findFirst = (candidates: string[]) => {
