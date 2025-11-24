@@ -13,7 +13,7 @@ const isProduction = (import.meta.env.MODE === 'production') || (typeof process 
 
 // Support both VITE_ prefixed vars (development) and debate_agent_ prefixed vars (production).
 const urlCandidates = isProduction
-	? ['debate_agent_SUPABASE_URL', 'DEBATE_AGENT_SUPABASE_URL', 'debate_agent_supabase_url', 'DEBATE_AGENT_SUPABASE_URL']
+	? ['debate_agent_VITE_PUBLIC_SUPABASE_URL', 'DEBATE_AGENT_VITE_PUBLIC_SUPABASE_URL', 'debate_agent_vite_public_supabase_url']
 	: ['VITE_SUPABASE_URL', 'vite_supabase_url'];
 
 const keyCandidates = isProduction
