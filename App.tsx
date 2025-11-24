@@ -4,7 +4,7 @@ import { Header } from './components/Header';
 import { CodeBlock } from './components/CodeBlock';
 import { Avatar } from './components/Avatars';
 import { Speaker, Message, DebateTopic, McpServer } from './types';
-import { getDebates } from './services/db';
+import { getDebates, insertDebate } from './services/db';
 import { MCPClient } from './services/mcpClient';
 
 // Define window interface to include jsyaml
@@ -15,6 +15,8 @@ declare global {
     };
   }
 }
+
+import supabase from './services/supabase';
 
 const DEFAULT_CONFIG_PLACEHOLDER = `{
   "command": "npx",
@@ -43,6 +45,7 @@ const App: React.FC = () => {
   // Auth State
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [showLoginModal, setShowLoginModal] = useState(false);
+  const [isSigningUp, setIsSigningUp] = useState(false);
   const [loginForm, setLoginForm] = useState({ username: '', password: '' });
   const [loginError, setLoginError] = useState('');
 
@@ -88,14 +91,42 @@ const App: React.FC = () => {
     loadConfig();
   }, []);
 
+  // Supabase auth: initialize session and listen for changes
+  useEffect(() => {
+    let subscription: any;
+    const init = async () => {
+      try {
+        const { data } = await supabase.auth.getSession();
+        if (data?.session) setIsLoggedIn(true);
+      } catch (err) {
+        // ignore
+      }
+      const { data: authListener } = supabase.auth.onAuthStateChange((_event, session) => {
+        setIsLoggedIn(!!session);
+      });
+      subscription = authListener?.subscription;
+    };
+    init();
+    return () => {
+      try { subscription?.unsubscribe(); } catch (e) {}
+    };
+  }, []);
+
   // Initialize DB and fetch topics
   useEffect(() => {
     const initData = async () => {
       try {
         const topics = await getDebates();
         if (topics.length > 0) {
-          setDebateTopics(topics);
-          setActiveTopic(topics[0]);
+          // Convert escaped sequences ("\\n\\t", "\\n", "\\t") into real newlines/tabs for display
+          const processed = topics.map(t => ({
+            ...t,
+            code: typeof t.code === 'string'
+              ? t.code.replace(/\\n\\t/g, '\n\t').replace(/\\n/g, '\n').replace(/\\t/g, '\t')
+              : t.code
+          }));
+          setDebateTopics(processed);
+          setActiveTopic(processed[0]);
         }
       } catch (e) {
         console.error("Failed to load DB", e);
@@ -199,14 +230,35 @@ const App: React.FC = () => {
         const client = new MCPClient(activeServer.url);
         const data = await client.getDebateTopic();
         
-        // Create a new topic object with a temporary unique ID
-        const newTopic: DebateTopic = {
-            id: Date.now(),
-            ...data
-        };
-        
-        setDebateTopics(prev => [...prev, newTopic]);
-        handleTopicSelect(newTopic);
+        // Persist the new topic to Supabase and use returned row
+        try {
+          const inserted = await insertDebate(data as Omit<DebateTopic, 'id'>);
+          if (inserted) {
+            const newTopic: DebateTopic = {
+              id: inserted.id,
+              title: inserted.title,
+              description: inserted.description,
+              code: typeof inserted.code === 'string'
+                ? inserted.code.replace(/\\n\\t/g, '\n\t').replace(/\\n/g, '\n').replace(/\\t/g, '\t')
+                : inserted.code,
+              script: typeof inserted.script === 'string' ? JSON.parse(inserted.script) : inserted.script || [],
+              preConditions: inserted.pre_conditions || inserted.preConditions || '',
+              postConditions: inserted.post_conditions || inserted.postConditions || '',
+              invariants: inserted.invariants || ''
+            };
+            setDebateTopics(prev => [...prev, newTopic]);
+            handleTopicSelect(newTopic);
+          } else {
+            // Fallback: use local temporary id
+            const newTopic: DebateTopic = { id: Date.now(), ...data };
+            setDebateTopics(prev => [...prev, newTopic]);
+            handleTopicSelect(newTopic);
+          }
+        } catch (err) {
+          const newTopic: DebateTopic = { id: Date.now(), ...data };
+          setDebateTopics(prev => [...prev, newTopic]);
+          handleTopicSelect(newTopic);
+        }
     } catch (e: any) {
         alert("MCP Error: " + e.message + "\n\nEnsure server is running and refresh the connection.");
     } finally {
@@ -289,14 +341,54 @@ const App: React.FC = () => {
 
   const handleLoginSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (loginForm.username === 'test' && loginForm.password === 'test') {
-      setIsLoggedIn(true);
-      setShowLoginModal(false);
-      setLoginForm({ username: '', password: '' });
-      setLoginError('');
-    } else {
-      setLoginError('Invalid credentials');
+    setLoginError('');
+    if (isSigningUp) {
+      (async () => {
+        try {
+          const { data, error } = await supabase.auth.signUp({
+            email: loginForm.username,
+            password: loginForm.password,
+          });
+          if (error) {
+            setLoginError(error.message || 'Signup failed');
+            return;
+          }
+          // Sign-up usually requires email confirmation depending on Supabase settings
+          setIsSigningUp(false);
+          setShowLoginModal(false);
+          setLoginForm({ username: '', password: '' });
+          setLoginError('');
+          alert('Sign up successful. Check your email to confirm your account if required.');
+        } catch (err: any) {
+          setLoginError(err?.message || 'Signup failed');
+        }
+      })();
+      return;
     }
+
+    (async () => {
+      try {
+        // Treat the username field as the email for Supabase auth
+        const { data, error } = await supabase.auth.signInWithPassword({
+          email: loginForm.username,
+          password: loginForm.password,
+        });
+        if (error) {
+          setLoginError(error.message || 'Login failed');
+          return;
+        }
+        if (data?.session) {
+          setIsLoggedIn(true);
+          setShowLoginModal(false);
+          setLoginForm({ username: '', password: '' });
+          setLoginError('');
+        } else {
+          setLoginError('Login succeeded but no session returned');
+        }
+      } catch (err: any) {
+        setLoginError(err?.message || 'Login failed');
+      }
+    })();
   };
 
   if (!activeTopic && !dbError) {
@@ -311,12 +403,13 @@ const App: React.FC = () => {
         onOpenTopics={() => setIsTopicModalOpen(true)}
         isLoggedIn={isLoggedIn}
         onLogin={() => {
-            setShowLoginModal(true);
-            setLoginError('');
+          setShowLoginModal(true);
+          setLoginError('');
         }}
-        onLogout={() => {
-            setIsLoggedIn(false);
-            setIsPlaying(false);
+        onLogout={async () => {
+          try { await supabase.auth.signOut(); } catch (e) {}
+          setIsLoggedIn(false);
+          setIsPlaying(false);
         }}
       />
 
@@ -338,7 +431,7 @@ const App: React.FC = () => {
                       </div>
                     )}
                     <div>
-                        <label className="block text-sm font-medium text-[#9dabb9] mb-1">Username</label>
+                        <label className="block text-sm font-medium text-[#9dabb9] mb-1">{isSigningUp ? 'Email' : 'Email'}</label>
                         <input 
                             type="text" 
                             value={loginForm.username}
@@ -357,12 +450,17 @@ const App: React.FC = () => {
                             placeholder="Enter password"
                         />
                     </div>
-                    <button 
-                        type="submit"
-                        className="w-full py-2.5 rounded-lg bg-[#9F70FD] text-white font-bold hover:bg-[#9F70FD]/90 transition-colors mt-2 shadow-lg shadow-[#9F70FD]/20"
-                    >
-                        Sign In
-                    </button>
+                    <div className="flex flex-col gap-2">
+                      <button 
+                          type="submit"
+                          className="w-full py-2.5 rounded-lg bg-[#9F70FD] text-white font-bold hover:bg-[#9F70FD]/90 transition-colors mt-2 shadow-lg shadow-[#9F70FD]/20"
+                      >
+                          {isSigningUp ? 'Create Account' : 'Sign In'}
+                      </button>
+                      <button type="button" onClick={() => { setIsSigningUp(!isSigningUp); setLoginError(''); }} className="w-full py-2.5 rounded-lg bg-transparent border border-white/10 text-sm text-[#9dabb9] hover:text-white transition-colors">
+                        {isSigningUp ? 'Have an account? Sign in' : "Don't have an account? Create one"}
+                      </button>
+                    </div>
                 </form>
             </div>
         </div>
