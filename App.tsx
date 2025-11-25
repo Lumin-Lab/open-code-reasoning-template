@@ -30,6 +30,16 @@ const DEFAULT_CONFIG_PLACEHOLDER = `{
 }`;
 
 const App: React.FC = () => {
+  // Normalize various speaker string values into the `Speaker` enum
+  const normalizeSpeaker = (s: any): Speaker => {
+    if (!s) return Speaker.User;
+    const val = String(s).toLowerCase();
+    if (val.includes('tutor')) return Speaker.Tutor;
+    if (val.includes('student')) return Speaker.Student;
+    if (val.includes('user')) return Speaker.User;
+    // default fallback
+    return Speaker.User;
+  };
   const [messages, setMessages] = useState<Message[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -123,7 +133,10 @@ const App: React.FC = () => {
             ...t,
             code: typeof t.code === 'string'
               ? t.code.replace(/\\n\\t/g, '\n\t').replace(/\\n/g, '\n').replace(/\\t/g, '\t')
-              : t.code
+              : t.code,
+            script: Array.isArray(t.script)
+              ? t.script.map((m: any) => ({ ...m, speaker: normalizeSpeaker(m.speaker) }))
+              : (typeof t.script === 'string' ? JSON.parse(t.script).map((m: any) => ({ ...m, speaker: normalizeSpeaker(m.speaker) })) : [])
           }));
           setDebateTopics(processed);
           setActiveTopic(processed[0]);
@@ -241,7 +254,10 @@ const App: React.FC = () => {
               code: typeof inserted.code === 'string'
                 ? inserted.code.replace(/\\n\\t/g, '\n\t').replace(/\\n/g, '\n').replace(/\\t/g, '\t')
                 : inserted.code,
-              script: typeof inserted.script === 'string' ? JSON.parse(inserted.script) : inserted.script || [],
+              script: ((): Message[] => {
+                const raw = typeof inserted.script === 'string' ? JSON.parse(inserted.script) : inserted.script || [];
+                return Array.isArray(raw) ? raw.map((m: any) => ({ ...m, speaker: normalizeSpeaker(m.speaker) })) : [];
+              })(),
               preConditions: inserted.pre_conditions || inserted.preConditions || '',
               postConditions: inserted.post_conditions || inserted.postConditions || '',
               invariants: inserted.invariants || ''
