@@ -1,13 +1,3 @@
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
-</div>
-
-# Run and deploy your AI Studio app
-
-This contains everything you need to run your app locally.
-
-View your app in AI Studio: https://ai.studio/apps/drive/1owKQ_sBu4Em9ea-vdaW2dzwWIExtphgl
-
 ## Run Locally
 
 **Prerequisites:**  Node.js
@@ -15,6 +5,17 @@ View your app in AI Studio: https://ai.studio/apps/drive/1owKQ_sBu4Em9ea-vdaW2dz
 
 1. Install dependencies:
    `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
+2. Copy `.env.example` to `.env.local` and set the `HUGGINGFACE_TOKEN` to your HuggingFace API token
 3. Run the app:
    `npm run dev`
+
+## Web UI Submission Requirements
+
+### Framework & Hosting
+Submissions must be built in React and deployed on the Vercel or Netlify platforms (template is provided for Vercel) via a public GitHub repository.
+
+### API Integration
+All LLM calls and integrations within the Web UI must utilize OpenAI-compatible APIs and the official OpenAI client SDKs.
+
+### API Key Security
+Integration of LLM calls must be handled through Vercel/Netlify Functions (serverless). Never expose API keys in client-side environments, such as the browser.
