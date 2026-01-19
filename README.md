@@ -5,7 +5,11 @@
 
 1. Install dependencies:
    `npm install`
-2. Copy `.env.example` to `.env.local` and set the `HUGGINGFACE_TOKEN` to your HuggingFace API token
+2. Copy `.env.example` to `.env.local` and set the following environment variables for local development:
+   - `HUGGINGFACE_TOKEN` - Your HuggingFace API token
+   - `VITE_SUPABASE_URL` - Your Supabase project URL
+   - `VITE_SUPABASE_ANON_KEY` - Your Supabase anonymous key
+   Prepare the Supabase database.
 3. Run the app:
    `npm run dev`
 
