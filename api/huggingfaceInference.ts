@@ -4,7 +4,7 @@ const generateDebateResponse = async (
     history: { role: string; parts: { text: string }[] }[],
     lastSpeaker: string
 ): Promise<string> => {
-    const API_KEY = process.env.VITE_HUGGINGFACE_TOKEN || '';
+    const API_KEY = process.env.HUGGINGFACE_TOKEN || '';
 
     if (!API_KEY) {
         console.warn("Hugging Face API Key not found. Returning mock response.");

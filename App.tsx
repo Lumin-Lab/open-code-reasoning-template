@@ -54,7 +54,7 @@ const App: React.FC = () => {
   const [isGenerating, setIsGenerating] = useState(false);
 
   // Gemini Integration
-  const handleManualGeminiFetch = async () => {
+  const handleManualFetch = async () => {
     if (!activeTopic) return;
     setIsGenerating(true);
 
@@ -84,10 +84,7 @@ const App: React.FC = () => {
 
     // Route to different APIs based on who will speak
     // Student AI -> Hugging Face, Tutor AI -> Gemini
-    const apiEndpoint = nextSpeaker === Speaker.Student
-      ? '/api/huggingfaceInference'
-      : '/api/geminiService';
-
+    const apiEndpoint = '/api/huggingfaceInference'
     try {
       // Call the appropriate API endpoint
       const response = await fetch(apiEndpoint, {
@@ -719,7 +716,13 @@ const App: React.FC = () => {
               <div className="space-y-6">
                 {/* Manual Gemini Trigger */}
                 <button
-                  onClick={handleManualGeminiFetch}
+                  onClick={() => {
+                    if (!isLoggedIn) {
+                      setShowLoginModal(true);
+                      return;
+                    }
+                    handleManualFetch();
+                  }}
                   disabled={isGenerating || !activeTopic}
                   className="w-full flex items-center justify-center gap-2 rounded-lg bg-[#252932] border border-dashed border-[#50E3C2]/50 text-[#50E3C2] hover:bg-[#50E3C2]/10 transition-colors font-bold disabled:opacity-50 py-3"
                 >
